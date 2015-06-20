@@ -1,0 +1,142 @@
+---
+title: "Practical Machine Learning - Project"
+author: "Arun Panangatt"
+date: "20 June 2015"
+output: html_document
+---
+Project Summary
+---------------
+The project is with reference to Human Activity Recognition(HAR). The project details how participants were asked to do barbell lifts 5 different ways-
+
+1.Sitting
+2.Sitting-down
+3.Standing 
+4.Standing-up
+5.Walking
+
+The resultant data was collected using devices like Jawbone Up, Nike FuelBand, and Fitbit worn by the paricipants. It is acknowledged that the classification of the quality of the exercises done by the participants may or may not have been correct.
+
+The obejctive is to build a machine learning algorithm to predict activity quality from activity sensor monitors and train a model based on the data received through various sensor values, which could later be used to predict the Classe variable,i.e, the manner in which the participants of HAR performed the exercises.
+
+Setting up the Environment
+--------------------------
+```{r}
+library(caret)
+```
+```{r}
+library(doParallel)
+library(randomForest)
+```
+```{r}
+set.seed(20150135)
+knitr::opts_chunk$set(echo=TRUE, fig.width=12, fig.height=12)
+```
+
+Downloading data
+----------------
+Data was downloaded from the following locations to the working directory
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+Cleaning Data
+-------------
+The pml-training.csv data is used to devise training and testing sets during fitting of the model. The pml-test.csv data is used to submit 20 test cases based on the fitted model.
+
+All blank "", #DIV/0 and NA values are converted to NA.
+```{r}
+cleantrain  <- read.csv('pml-training.csv', na.strings=c("NA","#DIV/0!", ""))
+cleantest    <- read.csv('pml-testing.csv' , na.strings=c("NA", "#DIV/0!", ""))
+```
+It is prudent to remove columns with too many "NA" values.
+```{r}
+tidydata   <- which((colSums(!is.na(cleantrain)) >= 0.6*nrow(cleantrain)))
+cleantrain <- cleantrain[,tidydata]
+cleantest    <- cleantest[,tidydata]
+```
+A few minor corrections to test set are needed to perform optimally with random forests.This deals with removal of problematic ids and correcting factor levels.
+
+```{r}
+cleantest <- cleantest[-ncol(cleantest)]
+cleantest$new_window <- factor(cleantest$new_window, levels=c("no","yes"))
+```
+The X and cvtd_timestamp columns are removed from the dataset as they are not relevant.
+```{r}
+cleantrain <- cleantrain[,-c(1,5)]
+cleantest    <- cleantest[,-c(1,5)]
+```
+Division of data into Training and Test data sets
+-------------------------------------------------
+Data is divided as follows - Training :60% and Test :40%
+
+```{r}
+Traindata  <- createDataPartition(cleantrain$classe, p = 0.6, list = FALSE)
+training    <- cleantrain[Traindata, ]
+testing     <- cleantrain[-Traindata, ]
+```
+Fitting Random Forests
+----------------------
+The output variable is named  class and other columns are in the dataframe named data
+```{r}
+class <- training$classe
+data  <- training[-ncol(training)]
+```
+The  Parallel Random Forest algorithm will be used to fit the model.A 5 fold cross validation will be applied in the algorithm.
+
+```{r}
+registerDoParallel()
+rf <- train(data, class, method="parRF", 
+    tuneGrid=data.frame(mtry=3), 
+    trControl=trainControl(method="cv",5))
+rf
+```
+A plot depicting the relative importance of the model variables is given in the Appendix ( Diagram 1)
+
+Confusion Matrix for the Tesing set
+-----------------------------------
+The next step is to predict on the Tesing set and generate the confusion matrix for the Testing set.
+```{r}
+testingPredictions <- predict(rf, newdata=testing)
+confMatrix <- confusionMatrix(testingPredictions,testing$classe)
+confMatrix
+```
+Conclusion
+----------
+
+Verification of Accuracy 
+```{r}
+confMatrix$overall[1]
+```
+Checking out of sample error
+```{r}
+osError<- 1 - as.numeric(confusionMatrix(testing$classe, testingPredictions)$overall[1])
+osError
+```
+
+It can be seen that the model predicts with an accuracy of 99.6% with a negligible out of sample error.
+
+APPENDIX
+--------
+
+DIAGRAM 1
+```{r}
+plot(varImp(rf))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
